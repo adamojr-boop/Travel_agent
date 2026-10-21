@@ -3,7 +3,7 @@
 [Dependencies]
 -> poetry install
 
-[Variables]
+[Variables/Secrets]
 -> OPENAI_API_KEY=inserisci_qui_la_tua_openai_api_key
    TAVILY_API_KEY=inserisci_qui_la_tua_tavily_api_key
 
