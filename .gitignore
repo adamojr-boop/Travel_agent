@@ -1,0 +1,35 @@
+#Environment & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+#Python / Byte-code / Cache
+pycache/
+*.py[cod]
+*$py.class
+*.so
+
+#Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+
+#IDE & Editor specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+#Logs
+*.log
+logs/
+
+#Ignore coverage reports and pytest cache
+.pytest_cache/
+.coverage
+htmlcov/
