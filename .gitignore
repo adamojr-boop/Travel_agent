@@ -6,7 +6,7 @@
 *.key
 
 #Python / Byte-code / Cache
-pycache/
+__pycache__/
 *.py[cod]
 *$py.class
 *.so
