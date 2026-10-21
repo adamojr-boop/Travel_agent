@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def preparatore_ricerca(input_data: dict) -> dict:
     testo = input_data["input_utente"]
-    logger.info("Analisi input e costruzione query di ricerca...")
+    print("\n--- Analisi input e costruzione query di ricerca ---")
     
     #Pulizia prompt utente
     pattern = r'\b(ciao|buongiorno|salve|per favore|grazie|mi\s+aiuti|puoi\s+aiutarmi)\b'
@@ -24,7 +24,7 @@ def preparatore_ricerca(input_data: dict) -> dict:
         testo_pulito = testo
 
     query_ottimizzata = f"voli, hotel consigliati, prezzi e attrazioni principali per: {testo_pulito}"
-    logger.info(f"Query generata: '{query_ottimizzata}'")
+    print(f"Query generata: '{query_ottimizzata}'")
     
     return {
         "input_utente": testo,
@@ -33,9 +33,23 @@ def preparatore_ricerca(input_data: dict) -> dict:
 
 prepara_ricerca_lambda = RunnableLambda(preparatore_ricerca)
 
+def estrai_valore_numerico(stringa_prezzo: str) -> float:
+    """Estrae un valore float da una stringa come '15545€' o '1.500,50 €'."""
+    if not stringa_prezzo:
+        return 0.0
+    #Rimuove simboli di valuta e lettere, pulisce i punti delle migliaia e converte la virgola in punto
+    numeri_puliti = re.sub(r'[^\d,\.]', '', stringa_prezzo)
+    if not numeri_puliti:
+        return 0.0
+    numeri_puliti = numeri_puliti.replace('.', '').replace(',', '.')
+    try:
+        return float(numeri_puliti)
+    except ValueError:
+        return 0.0
+
 def genera_piano_viaggio(richiesta_utente: str, numero_persone: int = 1, budget_massimo: float = None) -> PianoViaggio:
-    logger.info("--- Avvio Agente di Viaggio Completo ---")
-    logger.info(f"Richiesta: '{richiesta_utente}' | Partecipanti: {numero_persone} | Budget massimo: {budget_massimo}€")
+    print("\n--- Avvio Agente di Viaggio Completo ---")
+    print(f"Richiesta utente: '{richiesta_utente}' | Partecipanti: {numero_persone} | Budget massimo: {budget_massimo}€")
 
     dati_preparati = prepara_ricerca_lambda.invoke({"input_utente": richiesta_utente})
 
@@ -46,9 +60,9 @@ def genera_piano_viaggio(richiesta_utente: str, numero_persone: int = 1, budget_
     if tavily_key and tavily_key != "inserisci_qui_la_tua_tavily_api_key":
         try:
             tavily_tool = TavilySearch(max_results=5, tavily_api_key=tavily_key)
-            logger.info("Avvio ricerca live su Tavily per costi, alloggi e trasporti...")
+            print("Avvio ricerca live su Tavily per costi, alloggi e trasporti...")
             risultati_ricerca = tavily_tool.invoke({"query": dati_preparati["query_ricerca"]})
-            logger.info("Tavily ha recuperato le informazioni di mercato aggiornate.")
+            print("Tavily ha recuperato le informazioni di mercato aggiornate.")
         except Exception as e:
             logger.warning(f"Errore Tavily ({e}), prosieguo con le stime interne.")
     else:
@@ -56,12 +70,12 @@ def genera_piano_viaggio(richiesta_utente: str, numero_persone: int = 1, budget_
 
     llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
     llm_strutturato = llm.with_structured_output(PianoViaggio)
-    logger.info("Configurato GPT-4o con lo schema completo PianoViaggio.")
+    print("Configurato GPT-4o con lo schema completo PianoViaggio.")
 
     #Vincoli dinamici basati sugli input dell'utente
     vincoli_extra = f"- Numero partecipanti: {numero_persone} persona/e.\n"
     if budget_massimo:
-        vincoli_extra += f"- Budget massimo complessivo invalicabile: {budget_massimo}€.\n"
+        vincoli_extra += f"- BUDGET MASSIMO IMPERATIVO: Il 'budget_totale_stimato' NON DEVE IN ALCUN MODO SUPERARE i {budget_massimo}€.\n"
     else:
         vincoli_extra += "- Calcola un budget totale realistico rapportato al numero di persone.\n"
 
@@ -82,7 +96,7 @@ def genera_piano_viaggio(richiesta_utente: str, numero_persone: int = 1, budget_
         ("human", "Richiesta dell'utente: {input_utente}\n\nRisultati live dal Web (Tavily):\n{dati_web}")
     ])
 
-    logger.info("Generazione dell'itinerario finanziario e logistico in corso...")
+    print("Generazione dell'itinerario finanziario e logistico in corso...")
     
     catena = prompt | llm_strutturato
     risultato = catena.invoke({
@@ -90,8 +104,15 @@ def genera_piano_viaggio(richiesta_utente: str, numero_persone: int = 1, budget_
         "dati_web": str(risultati_ricerca)
     })
 
-    logger.info("Output validato con successo da Pydantic!")
-    logger.info(f"Destinazione: {risultato.destinazione} | Budget stimato: {risultato.riepilogo_budget.budget_totale_stimato}")
-    logger.info("--- Fine elaborazione ---")
+    #Controllo del budget (Verifica matematica)
+    if budget_massimo and risultato.riepilogo_budget and risultato.riepilogo_budget.budget_totale_stimato:
+        totale_calcolato = estrai_valore_numerico(risultato.riepilogo_budget.budget_totale_stimato)
+        if totale_calcolato > budget_massimo:
+            print(f"[ATTENZIONE] Il budget stimato ({totale_calcolato}€) supera il limite massimo ({budget_massimo}€).")
+            logger.warning(f"Il budget stimato {totale_calcolato} supera il massimo consentito {budget_massimo}")
+
+    print("Output validato con successo da Pydantic!")
+    print(f"Destinazione: {risultato.destinazione} | Budget stimato: {risultato.riepilogo_budget.budget_totale_stimato}")
+    print("--- Fine elaborazione ---")
 
     return risultato
